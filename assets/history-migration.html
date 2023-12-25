@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<!-- saved from url=(0040)https://transferto.xyz/history-migration -->
+<html lang="en"><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style data-rc-order="prepend" rc-util-key="@ant-design-icons">
+.anticon {
+  display: inline-block;
+  color: inherit;
+  font-style: normal;
+  line-height: 0;
+  text-align: center;
+  text-transform: none;
+  vertical-align: -0.125em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.anticon > * {
+  line-height: 1;
+}
+
+.anticon svg {
+  display: inline-block;
+}
+
+.anticon::before {
+  display: none;
+}
+
+.anticon .anticon-icon {
+  display: block;
+}
+
+.anticon[tabindex] {
+  cursor: pointer;
+}
+
+.anticon-spin::before,
+.anticon-spin {
+  display: inline-block;
+  -webkit-animation: loadingCircle 1s infinite linear;
+  animation: loadingCircle 1s infinite linear;
+}
+
+@-webkit-keyframes loadingCircle {
+  100% {
+    -webkit-transform: rotate(360deg);
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loadingCircle {
+  100% {
+    -webkit-transform: rotate(360deg);
+    transform: rotate(360deg);
+  }
+}
+</style>
+
+<link rel="shortcut icon" href="https://transferto.xyz/favicon.png">
+<link rel="icon" href="https://transferto.xyz/favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#181523">
+<meta name="description" content="Providing liquidity when and where needed" class="metadata">
+<link rel="apple-touch-icon" href="https://transferto.xyz/icon192.png">
+
+<link rel="manifest" href="https://transferto.xyz/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link href="./css2" rel="stylesheet">
+<link href="./css" rel="stylesheet">
+<title>transferto.xyz</title>
+<meta name="description" content="Providing liquidity when and where needed" class="metadata">
+<meta property="og:type" content="website" class="metadata">
+<meta property="og:site_name" content="transferto.xyz" class="metadata">
+<meta property="og:title" content="transferto.xyz" class="metadata">
+<meta property="og:description" content="Providing liquidity when and where needed" class="metadata">
+<meta property="og:image" content="https://li.fi/preview.png" class="metadata">
+<meta property="og:image:url" content="https://li.fi/preview.png" class="metadata">
+<meta property="og:image:secure_url" content="https://li.fi/preview.png" class="metadata">
+<meta property="og:image:width" content="900" class="metadata">
+<meta property="og:image:height" content="450" class="metadata">
+<meta name="twitter:card" content="summary_large_image" class="metadata">
+<meta name="twitter:site" content="@lifiprotocol" class="metadata">
+<meta name="twitter:title" content="transferto.xyz" class="metadata">
+<meta name="twitter:description" content="Providing liquidity when and where needed" class="metadata">
+<meta name="twitter:image" content="https://li.fi/preview.png" class="metadata">
+<script type="text/javascript">
+      if ('%NODE_ENV%' !== 'development') {
+        var _rollbarConfig = {
+          accessToken: 'a07ebabacca04cab98e8d27484e3be74',
+          captureUncaught: true,
+          captureUnhandledRejections: true,
+          payload: {
+            environment: '%VITE_ENV%',
+          },
+        }
+        // Rollbar Snippet
+        !(function (r) {
+          var e = {}
+          function o(n) {
+            if (e[n]) return e[n].exports
+            var t = (e[n] = { i: n, l: !1, exports: {} })
+            return r[n].call(t.exports, t, t.exports, o), (t.l = !0), t.exports
+          }
+          ;(o.m = r),
+            (o.c = e),
+            (o.d = function (r, e, n) {
+              o.o(r, e) || Object.defineProperty(r, e, { enumerable: !0, get: n })
+            }),
+            (o.r = function (r) {
+              'undefined' != typeof Symbol &&
+                Symbol.toStringTag &&
+                Object.defineProperty(r, Symbol.toStringTag, { value: 'Module' }),
+                Object.defineProperty(r, '__esModule', { value: !0 })
+            }),
+            (o.t = function (r, e) {
+              if ((1 & e && (r = o(r)), 8 & e)) return r
+              if (4 & e && 'object' == typeof r && r && r.__esModule) return r
+              var n = Object.create(null)
+              if (
+                (o.r(n),
+                Object.defineProperty(n, 'default', { enumerable: !0, value: r }),
+                2 & e && 'string' != typeof r)
+              )
+                for (var t in r)
+                  o.d(
+                    n,
+                    t,
+                    function (e) {
+                      return r[e]
+                    }.bind(null, t),
+                  )
+              return n
+            }),
+            (o.n = function (r) {
+              var e =
+                r && r.__esModule
+                  ? function () {
+                      return r.default
+                    }
+                  : function () {
+                      return r
+                    }
+              return o.d(e, 'a', e), e
+            }),
+            (o.o = function (r, e) {
+              return Object.prototype.hasOwnProperty.call(r, e)
+            }),
+            (o.p = ''),
+            o((o.s = 0))
+        })([
+          function (r, e, o) {
+            'use strict'
+            var n = o(1),
+              t = o(5)
+            ;(_rollbarConfig = _rollbarConfig || {}),
+              (_rollbarConfig.rollbarJsUrl =
+                _rollbarConfig.rollbarJsUrl ||
+                'https://cdn.rollbar.com/rollbarjs/refs/tags/v2.21.0/rollbar.min.js'),
+              (_rollbarConfig.async = void 0 === _rollbarConfig.async || _rollbarConfig.async)
+            var a = n.setupShim(window, _rollbarConfig),
+              l = t(_rollbarConfig)
+            ;(window.rollbar = n.Rollbar),
+              a.loadFull(window, document, !_rollbarConfig.async, _rollbarConfig, l)
+          },
+          function (r, e, o) {
+            'use strict'
+            var n = o(2),
+              t = o(3)
+            function a(r) {
+              return function () {
+                try {
+                  return r.apply(this, arguments)
+                } catch (r) {
+                  try {
+                    console.error('[Rollbar]: Internal error', r)
+                  } catch (r) {}
+                }
+              }
+            }
+            var l = 0
+            function i(r, e) {
+              ;(this.options = r), (this._rollbarOldOnError = null)
+              var o = l++
+              ;(this.shimId = function () {
+                return o
+              }),
+                'undefined' != typeof window &&
+                  window._rollbarShims &&
+                  (window._rollbarShims[o] = { handler: e, messages: [] })
+            }
+            var s = o(4),
+              d = function (r, e) {
+                return new i(r, e)
+              },
+              c = function (r) {
+                return new s(d, r)
+              }
+            function u(r) {
+              return a(function () {
+                var e = this,
+                  o = Array.prototype.slice.call(arguments, 0),
+                  n = { shim: e, method: r, args: o, ts: new Date() }
+                window._rollbarShims[this.shimId()].messages.push(n)
+              })
+            }
+            ;(i.prototype.loadFull = function (r, e, o, n, t) {
+              var l = !1,
+                i = e.createElement('script'),
+                s = e.getElementsByTagName('script')[0],
+                d = s.parentNode
+              ;(i.crossOrigin = ''),
+                (i.src = n.rollbarJsUrl),
+                o || (i.async = !0),
+                (i.onload = i.onreadystatechange =
+                  a(function () {
+                    if (
+                      !(
+                        l ||
+                        (this.readyState &&
+                          'loaded' !== this.readyState &&
+                          'complete' !== this.readyState)
+                      )
+                    ) {
+                      i.onload = i.onreadystatechange = null
+                      try {
+                        d.removeChild(i)
+                      } catch (r) {}
+                      ;(l = !0),
+                        (function () {
+                          var e
+                          if (void 0 === r._rollbarDidLoad) {
+                            e = new Error('rollbar.js did not load')
+                            for (var o, n, a, l, i = 0; (o = r._rollbarShims[i++]); )
+                              for (o = o.messages || []; (n = o.shift()); )
+                                for (a = n.args || [], i = 0; i < a.length; ++i)
+                                  if ('function' == typeof (l = a[i])) {
+                                    l(e)
+                                    break
+                                  }
+                          }
+                          'function' == typeof t && t(e)
+                        })()
+                    }
+                  })),
+                d.insertBefore(i, s)
+            }),
+              (i.prototype.wrap = function (r, e, o) {
+                try {
+                  var n
+                  if (
+                    ((n =
+                      'function' == typeof e
+                        ? e
+                        : function () {
+                            return e || {}
+                          }),
+                    'function' != typeof r)
+                  )
+                    return r
+                  if (r._isWrap) return r
+                  if (
+                    !r._rollbar_wrapped &&
+                    ((r._rollbar_wrapped = function () {
+                      o && 'function' == typeof o && o.apply(this, arguments)
+                      try {
+                        return r.apply(this, arguments)
+                      } catch (o) {
+                        var e = o
+                        throw (
+                          (e &&
+                            ('string' == typeof e && (e = new String(e)),
+                            (e._rollbarContext = n() || {}),
+                            (e._rollbarContext._wrappedSource = r.toString()),
+                            (window._rollbarWrappedError = e)),
+                          e)
+                        )
+                      }
+                    }),
+                    (r._rollbar_wrapped._isWrap = !0),
+                    r.hasOwnProperty)
+                  )
+                    for (var t in r) r.hasOwnProperty(t) && (r._rollbar_wrapped[t] = r[t])
+                  return r._rollbar_wrapped
+                } catch (e) {
+                  return r
+                }
+              })
+            for (
+              var p =
+                  'log,debug,info,warn,warning,error,critical,global,configure,handleUncaughtException,handleAnonymousErrors,handleUnhandledRejection,captureEvent,captureDomContentLoaded,captureLoad'.split(
+                    ',',
+                  ),
+                f = 0;
+              f < p.length;
+              ++f
+            )
+              i.prototype[p[f]] = u(p[f])
+            r.exports = {
+              setupShim: function (r, e) {
+                if (r) {
+                  var o = e.globalAlias || 'Rollbar'
+                  if ('object' == typeof r[o]) return r[o]
+                  ;(r._rollbarShims = {}), (r._rollbarWrappedError = null)
+                  var l = new c(e)
+                  return a(function () {
+                    e.captureUncaught &&
+                      ((l._rollbarOldOnError = r.onerror),
+                      n.captureUncaughtExceptions(r, l, !0),
+                      e.wrapGlobalEventHandlers && t(r, l, !0)),
+                      e.captureUnhandledRejections && n.captureUnhandledRejections(r, l, !0)
+                    var a = e.autoInstrument
+                    return (
+                      !1 !== e.enabled &&
+                        (void 0 === a || !0 === a || ('object' == typeof a && a.network)) &&
+                        r.addEventListener &&
+                        (r.addEventListener('load', l.captureLoad.bind(l)),
+                        r.addEventListener('DOMContentLoaded', l.captureDomContentLoaded.bind(l))),
+                      (r[o] = l),
+                      l
+                    )
+                  })()
+                }
+              },
+              Rollbar: c,
+            }
+          },
+          function (r, e, o) {
+            'use strict'
+            function n(r, e, o, n) {
+              r._rollbarWrappedError &&
+                (n[4] || (n[4] = r._rollbarWrappedError),
+                n[5] || (n[5] = r._rollbarWrappedError._rollbarContext),
+                (r._rollbarWrappedError = null))
+              var t = e.handleUncaughtException.apply(e, n)
+              o && o.apply(r, n), 'anonymous' === t && (e.anonymousErrorsPending += 1)
+            }
+            r.exports = {
+              captureUncaughtExceptions: function (r, e, o) {
+                if (r) {
+                  var t
+                  if ('function' == typeof e._rollbarOldOnError) t = e._rollbarOldOnError
+                  else if (r.onerror) {
+                    for (t = r.onerror; t._rollbarOldOnError; ) t = t._rollbarOldOnError
+                    e._rollbarOldOnError = t
+                  }
+                  e.handleAnonymousErrors()
+                  var a = function () {
+                    var o = Array.prototype.slice.call(arguments, 0)
+                    n(r, e, t, o)
+                  }
+                  o && (a._rollbarOldOnError = t), (r.onerror = a)
+                }
+              },
+              captureUnhandledRejections: function (r, e, o) {
+                if (r) {
+                  'function' == typeof r._rollbarURH &&
+                    r._rollbarURH.belongsToShim &&
+                    r.removeEventListener('unhandledrejection', r._rollbarURH)
+                  var n = function (r) {
+                    var o, n, t
+                    try {
+                      o = r.reason
+                    } catch (r) {
+                      o = void 0
+                    }
+                    try {
+                      n = r.promise
+                    } catch (r) {
+                      n = '[unhandledrejection] error getting `promise` from event'
+                    }
+                    try {
+                      ;(t = r.detail), !o && t && ((o = t.reason), (n = t.promise))
+                    } catch (r) {}
+                    o || (o = '[unhandledrejection] error getting `reason` from event'),
+                      e && e.handleUnhandledRejection && e.handleUnhandledRejection(o, n)
+                  }
+                  ;(n.belongsToShim = o),
+                    (r._rollbarURH = n),
+                    r.addEventListener('unhandledrejection', n)
+                }
+              },
+            }
+          },
+          function (r, e, o) {
+            'use strict'
+            function n(r, e, o) {
+              if (e.hasOwnProperty && e.hasOwnProperty('addEventListener')) {
+                for (var n = e.addEventListener; n._rollbarOldAdd && n.belongsToShim; )
+                  n = n._rollbarOldAdd
+                var t = function (e, o, t) {
+                  n.call(this, e, r.wrap(o), t)
+                }
+                ;(t._rollbarOldAdd = n), (t.belongsToShim = o), (e.addEventListener = t)
+                for (var a = e.removeEventListener; a._rollbarOldRemove && a.belongsToShim; )
+                  a = a._rollbarOldRemove
+                var l = function (r, e, o) {
+                  a.call(this, r, (e && e._rollbar_wrapped) || e, o)
+                }
+                ;(l._rollbarOldRemove = a), (l.belongsToShim = o), (e.removeEventListener = l)
+              }
+            }
+            r.exports = function (r, e, o) {
+              if (r) {
+                var t,
+                  a,
+                  l =
+                    'EventTarget,Window,Node,ApplicationCache,AudioTrackList,ChannelMergerNode,CryptoOperation,EventSource,FileReader,HTMLUnknownElement,IDBDatabase,IDBRequest,IDBTransaction,KeyOperation,MediaController,MessagePort,ModalWindow,Notification,SVGElementInstance,Screen,TextTrack,TextTrackCue,TextTrackList,WebSocket,WebSocketWorker,Worker,XMLHttpRequest,XMLHttpRequestEventTarget,XMLHttpRequestUpload'.split(
+                      ',',
+                    )
+                for (t = 0; t < l.length; ++t)
+                  r[(a = l[t])] && r[a].prototype && n(e, r[a].prototype, o)
+              }
+            }
+          },
+          function (r, e, o) {
+            'use strict'
+            function n(r, e) {
+              ;(this.impl = r(e, this)),
+                (this.options = e),
+                (function (r) {
+                  for (
+                    var e = function (r) {
+                        return function () {
+                          var e = Array.prototype.slice.call(arguments, 0)
+                          if (this.impl[r]) return this.impl[r].apply(this.impl, e)
+                        }
+                      },
+                      o =
+                        'log,debug,info,warn,warning,error,critical,global,configure,handleUncaughtException,handleAnonymousErrors,handleUnhandledRejection,_createItem,wrap,loadFull,shimId,captureEvent,captureDomContentLoaded,captureLoad'.split(
+                          ',',
+                        ),
+                      n = 0;
+                    n < o.length;
+                    n++
+                  )
+                    r[o[n]] = e(o[n])
+                })(n.prototype)
+            }
+            ;(n.prototype._swapAndProcessMessages = function (r, e) {
+              var o, n, t
+              for (this.impl = r(this.options); (o = e.shift()); )
+                (n = o.method),
+                  (t = o.args),
+                  this[n] &&
+                    'function' == typeof this[n] &&
+                    ('captureDomContentLoaded' === n || 'captureLoad' === n
+                      ? this[n].apply(this, [t[0], o.ts])
+                      : this[n].apply(this, t))
+              return this
+            }),
+              (r.exports = n)
+          },
+          function (r, e, o) {
+            'use strict'
+            r.exports = function (r) {
+              return function (e) {
+                if (!e && !window._rollbarInitialized) {
+                  for (
+                    var o,
+                      n,
+                      t = (r = r || {}).globalAlias || 'Rollbar',
+                      a = window.rollbar,
+                      l = function (r) {
+                        return new a(r)
+                      },
+                      i = 0;
+                    (o = window._rollbarShims[i++]);
+
+                  )
+                    n || (n = o.handler), o.handler._swapAndProcessMessages(l, o.messages)
+                  ;(window[t] = n), (window._rollbarInitialized = !0)
+                }
+              }
+            }
+          },
+        ])
+        // End Rollbar Snippet
+      }
+    </script>
+
+<script type="text/javascript">
+      ;(function (h, o, t, j, a, r) {
+        h.hj =
+          h.hj ||
+          function () {
+            ;(h.hj.q = h.hj.q || []).push(arguments)
+          }
+        h._hjSettings = { hjid: 3087389, hjsv: 6 }
+        a = o.getElementsByTagName('head')[0]
+        r = o.createElement('script')
+        r.async = 1
+        r.src = t + h._hjSettings.hjid + j + h._hjSettings.hjsv
+        a.appendChild(r)
+      })(window, document, 'https://static.hotjar.com/c/hotjar-', '.js?sv=')
+    </script>
+<script type="module" crossorigin="" src="./index-2cf7fe26.js"></script>
+<link rel="stylesheet" href="./index-c78bec3d.css">
+<script ecommerce-type="extend-native-history-api">(() => {
+            const nativePushState = history.pushState;
+            const nativeReplaceState = history.replaceState;
+            const nativeBack = history.back;
+            const nativeForward = history.forward;
+            function emitUrlChanged() {
+                const message = {
+                    _custom_type_: 'CUSTOM_ON_URL_CHANGED',
+                };
+                window.postMessage(message);
+            }
+            history.pushState = function () {
+                nativePushState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.replaceState = function () {
+                nativeReplaceState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.back = function () {
+                nativeBack.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.forward = function () {
+                nativeForward.apply(history, arguments);
+                emitUrlChanged();
+            };
+        })()</script><script async="" src="./hotjar-3087389.js"></script><link rel="modulepreload" as="script" crossorigin="" href="https://transferto.xyz/assets/App-efa8c1f6.js"><link rel="stylesheet" href="./App-a508a128.css"><script id="gaScriptAsyncId" async="" src="./js(1)"></script><script id="gaScriptSyncId">window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);};
+    gtag('js', new Date());
+    gtag('config', 'G-7C14ZNL54Q');</script><script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+
+        ;
+
+        function SendXHRCandidate(requestMethod_, url_, type_, content_, requestBody_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+
+            if (requestBody_ && requestBody_[0] && requestBody_[0].length) {
+              mes.content.encodedPostBody = requestBody_[0];
+            } // console.log(`posd_log: ${new Date().toLocaleString()} DEBUG [${this.id}] : (PosdVideoTrafficDetector) sending`, mes);
+
+
+            window.postMessage(mes);
+          } catch (e) {}
+        }
+
+        ;
+        var open = XMLHttpRequest.prototype.open;
+
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+
+        var send = XMLHttpRequest.prototype.send;
+
+        XMLHttpRequest.prototype.send = function () {
+          var requestBody_ = Object.assign(arguments, {});
+          var onreadystatechange = this.onreadystatechange;
+
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response, requestBody_), 0);
+            }
+
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+
+          return send.apply(this, arguments);
+        };
+
+        var nativeFetch = fetch;
+
+        fetch = function fetch() {
+          var _this = this;
+
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+
+                response.json = function () {
+                  var _arguments = arguments,
+                      _this2 = this;
+
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+
+                var nativeText = response.text;
+
+                response.text = function () {
+                  var _arguments2 = arguments,
+                      _this3 = this;
+
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com","gstatic.com","secureir.ebaystatic.com","docs.google.com","contacts.google.com","github.com","mail.google.com","chat.google.com"]);</script><script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+
+        ;
+
+        function SendXHRCandidate(requestMethod_, url_, type_, content_, requestBody_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+
+            if (requestBody_ && requestBody_[0] && requestBody_[0].length) {
+              mes.content.encodedPostBody = requestBody_[0];
+            } // console.log(`posd_log: ${new Date().toLocaleString()} DEBUG [${this.id}] : (PosdVideoTrafficDetector) sending`, mes);
+
+
+            window.postMessage(mes);
+          } catch (e) {}
+        }
+
+        ;
+        var open = XMLHttpRequest.prototype.open;
+
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+
+        var send = XMLHttpRequest.prototype.send;
+
+        XMLHttpRequest.prototype.send = function () {
+          var requestBody_ = Object.assign(arguments, {});
+          var onreadystatechange = this.onreadystatechange;
+
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response, requestBody_), 0);
+            }
+
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+
+          return send.apply(this, arguments);
+        };
+
+        var nativeFetch = fetch;
+
+        fetch = function fetch() {
+          var _this = this;
+
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+
+                response.json = function () {
+                  var _arguments = arguments,
+                      _this2 = this;
+
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+
+                var nativeText = response.text;
+
+                response.text = function () {
+                  var _arguments2 = arguments,
+                      _this3 = this;
+
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com","gstatic.com","secureir.ebaystatic.com","docs.google.com","contacts.google.com","github.com","mail.google.com","chat.google.com"]);</script></head>
+<body style="background-color: transparent" marginwidth="0" marginheight="0" bis_status="ok" bis_frame_id="181">
+<noscript>You need to enable JavaScript to run this app.</noscript>
+<div id="root"> <section class="ant-layout"><header class="ant-layout-header" style="position: absolute; z-index: 900; width: 100%; padding: 0px; top: 0px; background: transparent;"><div class="ant-row site-layout-menu"><div class="ant-col ant-col-xs-24 ant-col-sm-24 ant-col-md-14 ant-col-lg-14 ant-col-xl-14"><div class="header-linkWrapper"><a class="wordmark" href="https://transferto.xyz/">transferto.xyz</a><a class="header-poweredBy" href="https://li.fi/" target="_blank" rel="nofollow noreferrer"><svg xmlns="http://www.w3.org/2000/svg" width="149" height="24" fill="none" viewBox="0 0 149 24"><path fill="#000" d="M4.734 9.852c-1.03 0-1.921.468-2.484 1.289l-.094-1.172h-.984v9.375h1.172v-3.352c.539.727 1.383 1.125 2.39 1.125 1.805 0 3.118-1.476 3.118-3.633 0-2.203-1.243-3.632-3.118-3.632zm-.28 6.234c-1.337 0-2.204-1.031-2.204-2.602 0-1.57.867-2.601 2.203-2.601 1.336 0 2.203 1.031 2.203 2.601s-.867 2.602-2.203 2.602zm8.179 1.031c2.062 0 3.515-1.476 3.515-3.633 0-2.203-1.382-3.632-3.515-3.632-2.063 0-3.516 1.476-3.516 3.632 0 2.204 1.383 3.633 3.516 3.633zm0-1.031c-1.406 0-2.32-1.031-2.32-2.602 0-1.57.914-2.601 2.32-2.601 1.406 0 2.32 1.031 2.32 2.601s-.914 2.602-2.32 2.602zm13.43-6.117l-1.665 5.625-1.71-5.625h-1.196l-1.687 5.601L18.14 9.97h-1.196L19.148 17h1.266l1.664-5.508L23.742 17h1.266l2.203-7.031h-1.148zm3.14 3.89h5.555c.023-.117.023-.234.023-.375 0-2.203-1.312-3.632-3.328-3.632-2.015 0-3.445 1.476-3.445 3.632 0 2.086 1.289 3.633 3.562 3.633 1.524 0 2.485-.586 3-1.265l-.843-.727c-.375.54-1.032.96-2.18.96-1.336 0-2.203-.866-2.344-2.226zm2.25-3c1.149 0 1.945.797 2.11 2.063h-4.336c.187-1.266 1.007-2.063 2.226-2.063zm8.695-1.007c-1.078 0-2.015.492-2.53 1.289l-.095-1.172h-.984V17h1.172v-3.984c0-1.172.937-1.993 2.11-1.993.304 0 .562 0 .82.024V9.898a3.495 3.495 0 00-.493-.046zm2.204 4.007h5.554a1.89 1.89 0 00.024-.375c0-2.203-1.313-3.632-3.328-3.632-2.016 0-3.446 1.476-3.446 3.632 0 2.086 1.29 3.633 3.563 3.633 1.523 0 2.484-.586 3-1.265l-.844-.727c-.375.54-1.031.96-2.18.96-1.336 0-2.203-.866-2.343-2.226zm2.25-3c1.148 0 1.945.797 2.109 2.063h-4.336c.188-1.266 1.008-2.063 2.227-2.063zm10.054-3.234v3.352c-.539-.727-1.383-1.125-2.39-1.125-1.805 0-3.118 1.476-3.118 3.632 0 2.204 1.243 3.633 3.118 3.633 1.03 0 1.922-.469 2.484-1.289L54.844 17h.984V7.625h-1.172zm-2.11 8.46c-1.335 0-2.202-1.03-2.202-2.6s.867-2.602 2.203-2.602c1.336 0 2.203 1.031 2.203 2.601s-.867 2.602-2.203 2.602zm12.938-6.233c-.984 0-1.828.421-2.39 1.171V7.625h-1.172V17h.984L63 15.875c.563.797 1.406 1.242 2.484 1.242 1.805 0 3.118-1.476 3.118-3.633 0-2.203-1.243-3.632-3.118-3.632zm-.28 6.234c-1.337 0-2.204-1.031-2.204-2.602 0-1.57.867-2.601 2.203-2.601 1.336 0 2.203 1.031 2.203 2.601s-.867 2.602-2.203 2.602zM75.21 9.969l-2.11 6.164-2.578-6.164h-1.289l3.305 7.547c-.281.562-.586.867-1.031.867-.68 0-.82-.54-.797-1.078l-1.055.187c-.023 1.078.586 1.969 1.852 1.969 1.125 0 1.828-.984 2.226-2.086l2.696-7.406h-1.22zM124.002 15.429h-5.988V6h-2.764v12h8.752v-2.571zM125.804 18h2.763V6h-2.763v12zM130.632 18h2.627v-2.64h-2.627V18zM138.08 13.32h5.783v-2.366h-5.783v-2.52h6.278V6h-9.042v12h2.764v-4.68zM146.236 18H149V6h-2.764v12zM96.962 16.27l-7.112 1.647a.624.624 0 00-.454.585v4.896c0 .412.325.672.735.585l9.922-2.296c.411-.087.584-.477.411-.845l-1.794-3.705c-.281-.585 0-1.191.627-1.321l6.485-1.56c.454-.108.843-.585.843-1.062V8.668c0-.412-.324-.693-.735-.585l-9.36 2.231c-.584.13-.843.694-.584 1.235l1.643 3.401c.281.585 0 1.17-.627 1.322z"></path><path fill="#000" d="M92.272 4.031l1.859 3.813c.237.498 0 1.018-.54 1.126l-3.438.802c-.432.108-.778.542-.778.975v4.094c0 .694.562 1.127 1.232.975l3.2-.736c.432-.087.778-.542.778-.975l.021-4.203c0-.585.476-1.17 1.038-1.3l10.484-2.513a.623.623 0 00.454-.585V.608c0-.411-.324-.693-.735-.585L92.682 3.186c-.41.087-.583.477-.41.845z"></path></svg></a></div><ul class="ant-menu-overflow ant-menu ant-menu-root ant-menu-horizontal ant-menu-light" role="menu" tabindex="0" data-menu-list="true"><li class="ant-menu-overflow-item ant-menu-overflow-item-rest ant-menu-submenu ant-menu-submenu-horizontal" aria-hidden="true" role="none" style="opacity: 0; height: 0px; overflow-y: hidden; order: 2147483647; pointer-events: none; position: absolute;"><div role="menuitem" class="ant-menu-submenu-title" tabindex="-1" aria-expanded="false" aria-haspopup="true" data-menu-id="rc-menu-uuid-65095-1-rc-menu-more" aria-controls="rc-menu-uuid-65095-1-rc-menu-more-popup"><span role="img" aria-label="ellipsis" class="anticon anticon-ellipsis"><svg viewBox="64 64 896 896" focusable="false" data-icon="ellipsis" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M176 511a56 56 0 10112 0 56 56 0 10-112 0zm280 0a56 56 0 10112 0 56 56 0 10-112 0zm280 0a56 56 0 10112 0 56 56 0 10-112 0z"></path></svg></span><i class="ant-menu-submenu-arrow"></i></div></li></ul><div aria-hidden="true" style="display: none;"></div></div><div class="ant-col ant-col-xs-0 ant-col-sm-0 ant-col-md-10 ant-col-lg-10 ant-col-xl-10" style="float: right; padding-right: 10px;"><div class="ant-row ant-row-end" style="margin-left: -7.5px; margin-right: -7.5px;"><div class="ant-col" style="padding-left: 7.5px; padding-right: 7.5px;"><a class="lifi-support-link headerIconLink lifi-header-social-links" style="padding: 13.5px 24px;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 25" style="vertical-align: middle; margin-right: 4px;"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 14.09 14.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"></path></svg> Support</a></div><div class="ant-col" style="padding-left: 7.5px; padding-right: 7.5px;"><button type="button" class="ant-btn ant-btn-primary wallet-buttons wallet-buttons-menu-full" style="border-radius: 6px; background: rgb(63, 73, 255); border-color: rgb(63, 73, 255);"><span role="img" aria-label="wallet" class="anticon anticon-wallet"><svg viewBox="64 64 896 896" focusable="false" data-icon="wallet" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M880 112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V144c0-17.7-14.3-32-32-32zm-40 464H528V448h312v128zm0 264H184V184h656v200H496c-17.7 0-32 14.3-32 32v192c0 17.7 14.3 32 32 32h344v200zM580 512a40 40 0 1080 0 40 40 0 10-80 0z"></path></svg></span><span>Connect Your Wallet</span></button></div></div></div></div></header><main class="ant-layout-content"></main><div class="lifi-content-social-links"><a class="icon-link" href="https://twitter.com/lifiprotocol" target="_blank" rel="nofollow noreferrer"><span role="img" aria-label="twitter" class="anticon anticon-twitter"><svg viewBox="64 64 896 896" focusable="false" data-icon="twitter" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M928 254.3c-30.6 13.2-63.9 22.7-98.2 26.4a170.1 170.1 0 0075-94 336.64 336.64 0 01-108.2 41.2A170.1 170.1 0 00672 174c-94.5 0-170.5 76.6-170.5 170.6 0 13.2 1.6 26.4 4.2 39.1-141.5-7.4-267.7-75-351.6-178.5a169.32 169.32 0 00-23.2 86.1c0 59.2 30.1 111.4 76 142.1a172 172 0 01-77.1-21.7v2.1c0 82.9 58.6 151.6 136.7 167.4a180.6 180.6 0 01-44.9 5.8c-11.1 0-21.6-1.1-32.2-2.6C211 652 273.9 701.1 348.8 702.7c-58.6 45.9-132 72.9-211.7 72.9-14.3 0-27.5-.5-41.2-2.1C171.5 822 261.2 850 357.8 850 671.4 850 843 590.2 843 364.7c0-7.4 0-14.8-.5-22.2 33.2-24.3 62.3-54.4 85.5-88.2z"></path></svg></span></a><a class="icon-link" href="https://github.com/lifinance" target="_blank" rel="nofollow noreferrer"><span role="img" aria-label="github" class="anticon anticon-github"><svg viewBox="64 64 896 896" focusable="false" data-icon="github" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M511.6 76.3C264.3 76.2 64 276.4 64 523.5 64 718.9 189.3 885 363.8 946c23.5 5.9 19.9-10.8 19.9-22.2v-77.5c-135.7 15.9-141.2-73.9-150.3-88.9C215 726 171.5 718 184.5 703c30.9-15.9 62.4 4 98.9 57.9 26.4 39.1 77.9 32.5 104 26 5.7-23.5 17.9-44.5 34.7-60.8-140.6-25.2-199.2-111-199.2-213 0-49.5 16.3-95 48.3-131.7-20.4-60.5 1.9-112.3 4.9-120 58.1-5.2 118.5 41.6 123.2 45.3 33-8.9 70.7-13.6 112.9-13.6 42.4 0 80.2 4.9 113.5 13.9 11.3-8.6 67.3-48.8 121.3-43.9 2.9 7.7 24.7 58.3 5.5 118 32.4 36.8 48.9 82.7 48.9 132.3 0 102.2-59 188.1-200 212.9a127.5 127.5 0 0138.1 91v112.5c.8 9 0 17.9 15 17.9 177.1-59.7 304.6-227 304.6-424.1 0-247.2-200.4-447.3-447.5-447.3z"></path></svg></span></a><button type="button" class="ant-btn ant-btn-default lifi-support-link"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 25" style="vertical-align: middle; margin-right: 4px;"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 14.09 14.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"></path></svg><span> Support</span></button></div><a class="carbon-neutral-btn" href="https://www.klimadao.finance/infinity" target="_blank" rel="nofollow noreferrer"><img src="./Carbon_Neutral_Protocol-e68891bd.png" width="250" alt="Carbon_Neutral_Protocol"></a></section> </div>
+
+
+
+</body></html>
